@@ -43,7 +43,7 @@ export const selectedSquare$: Observable<Square> = fromEvent(gamePiecesCanvas, '
       mx >= square.x && mx <= square.x + square.size &&
       my >= square.y && my <= square.y + square.size
     )
-  }), distinctUntilChanged())
+  }))
 
 export const clearRect = ((ctx2d: CanvasRenderingContext2D) => (square: Square) => {
   ctx2d.clearRect(square.x, square.y, square.size, square.size);

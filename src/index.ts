@@ -32,7 +32,7 @@ pieces.forEach((piece: Piece) => {
   pieceTypesBlue.appendChild(pieceDiv);
 });
 
-const isOccupaied = (selected: Square) => {
+const isOccupaied = (selected: Square, gamePieces: GamePiece[]) => {
   return selected && gamePieces.some((x => intersect(x.square)(selected)));
 }
 
@@ -40,9 +40,7 @@ const hasPiecesOfType = (selected: Piece, color: PieceColor, gamePieces: GamePie
   return gamePieces.filter(x => x.color === color && x.type == selected.type).length < selected.numberOfPieces
 }
 
-let gamePieces: GamePiece[] = [];
-
-const piecesOnFieldChanged$: BehaviorSubject<GamePiece[]> = new BehaviorSubject(gamePieces);
+const piecesOnFieldChanged$: BehaviorSubject<GamePiece[]> = new BehaviorSubject([]);
 
 const turnChanged$ = new Subject();
 
@@ -67,24 +65,24 @@ const selectedGamePiece$ = selectedSquare$.pipe(
 
 selectedSquare$.pipe(
   withLatestFrom(selectedPieceMeta$, currentColor$, piecesOnFieldChanged$),
-  filter(([selected, meta, color, gamePieces]) => !isOccupaied(selected) && hasPiecesOfType(meta.piece, color, gamePieces)),
+  filter(([selected, meta, color, gamePieces]) => !isOccupaied(selected, gamePieces) && hasPiecesOfType(meta.piece, color, gamePieces)),
   takeUntil(gameStarted$)
 ).subscribe(([selectedSquare, meta, color, gamePieces]) => {
 
-  gamePieces = ([...gamePieces, {
+  gamePieces = [...gamePieces, {
     rank: meta.piece.rank,
     type: meta.piece.type,
     color: color,
     square: selectedSquare,
     id: uuidv4(),
     hidden: true
-  }]);
+  }];
   piecesOnFieldChanged$.next(gamePieces);
 
   if (!hasPiecesOfType(meta.piece, color, gamePieces)) {
     meta.node.remove();
   }
-
+  console.log(gamePieces)
   if (gamePieces.length % PIECES_PER_PLAYER === 0) {
     turnChanged$.next();
   }
@@ -109,9 +107,9 @@ posibleMovementsChanged$
 
 selectedSquare$.pipe(
   skipUntil(gameStarted$),
-  withLatestFrom(posibleMovementsChanged$, selectedGamePiece$),
+  withLatestFrom(posibleMovementsChanged$, selectedGamePiece$, piecesOnFieldChanged$),
   filter(([square, movements]) => movements && movements.some(intersect(square))),
-).subscribe(([destination, , gamePiece]) => {
+).subscribe(([destination, , gamePiece, gamePieces]) => {
 
   gamePieces = gamePieces.map(x => {
     return x.id === gamePiece.id ? { ...x, square: destination } : x;
@@ -127,10 +125,11 @@ const enemyUnderAttack$ = selectedSquare$.pipe(
   filter(enemy => !!enemy),
 )
 const occupied$ = piecesOnFieldChanged$.pipe(map(x => x.map(y => y.square)));
+
 enemyUnderAttack$.pipe(
-  withLatestFrom(selectedGamePiece$, occupied$),
+  withLatestFrom(selectedGamePiece$, occupied$, piecesOnFieldChanged$),
   filter(([enemy, player, occupied]) => canAttack(player, enemy, occupied)),
-).subscribe(([enemy, player]) => {
+).subscribe(([enemy, player, ,gamePieces]) => {
 
   const result = attack(player, enemy);
 
@@ -158,12 +157,15 @@ enemyUnderAttack$.pipe(
 })
 
 piecesOnFieldChanged$.pipe(
-  takeWhile(items => items.length < (PIECES_PER_PLAYER * 2))
+  takeUntil(gameStarted$),
+  withLatestFrom(currentColor$),
+  map(([items, color]) => items.filter(x => x.color === color)),
 ).subscribe(items => items.forEach(drawPlayerGamePiece))
 
 turnChanged$.pipe(
   tap(() => posibleMovementsChanged$.next([])),
   switchMap(() => piecesOnFieldChanged$.pipe(take(1))),
+  startWith([] as GamePiece[]),
   pairwise(),
   withLatestFrom(currentColor$),
 ).subscribe(([[prev, cur], color]) => {
