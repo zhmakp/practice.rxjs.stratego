@@ -1,6 +1,6 @@
 import { selectedSquare$, clearRect, fillRect, drawPlayerGamePiece, drawOponentGamePiece } from './render';
 import { Subject, Observable, BehaviorSubject, merge, zip, of, concat, interval } from 'rxjs';
-import { withLatestFrom, filter, pairwise, startWith, scan, takeWhile, map, skipUntil, distinctUntilChanged, switchMap, skipWhile, tap, take, flatMap, mergeMap, debounceTime, debounce, last } from 'rxjs/operators';
+import { withLatestFrom, filter, pairwise, startWith, scan, takeWhile, map, skipUntil, distinctUntilChanged, switchMap, skipWhile, tap, take, flatMap, mergeMap, debounceTime, debounce, last, takeUntil } from 'rxjs/operators';
 import { Piece, PieceColor, GamePiece, AttackResult } from './models/piece.model';
 import { pieces, PIECES_PER_PLAYER, SQUARE_SIZE } from './config';
 import { red, blue } from './img';
@@ -156,6 +156,10 @@ enemyUnderAttack$.pipe(
   piecesOnFieldChanged$.next(gamePieces);
   turnChanged$.next();
 })
+
+piecesOnFieldChanged$.pipe(
+  takeWhile(items => items.length < (PIECES_PER_PLAYER * 2))
+).subscribe(items => items.forEach(drawPlayerGamePiece))
 
 turnChanged$.pipe(
   tap(() => posibleMovementsChanged$.next([])),
