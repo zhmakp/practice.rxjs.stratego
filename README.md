@@ -1,2 +1,2 @@
-# Practice.RxJsx.Stratego
+# Practice.RxJs.Stratego
 Reactive programing with RxJS
