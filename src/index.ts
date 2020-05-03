@@ -36,7 +36,7 @@ const isOccupaied = (selected: Square) => {
   return selected && gamePieces.some((x => intersect(x.square)(selected)));
 }
 
-const hasPiecesOfType = (selected: Piece, color: PieceColor) => {
+const hasPiecesOfType = (selected: Piece, color: PieceColor, gamePieces: GamePiece[]) => {
   return gamePieces.filter(x => x.color === color && x.type == selected.type).length < selected.numberOfPieces
 }
 
@@ -66,10 +66,10 @@ const selectedGamePiece$ = selectedSquare$.pipe(
 )
 
 selectedSquare$.pipe(
-  withLatestFrom(selectedPieceMeta$, currentColor$),
-  filter(([selected, meta, color]) => !isOccupaied(selected) && hasPiecesOfType(meta.piece, color)),
-  takeWhile(() => gamePieces.length < (PIECES_PER_PLAYER * 2))
-).subscribe(([selectedSquare, meta, color]) => {
+  withLatestFrom(selectedPieceMeta$, currentColor$, piecesOnFieldChanged$),
+  filter(([selected, meta, color, gamePieces]) => !isOccupaied(selected) && hasPiecesOfType(meta.piece, color, gamePieces)),
+  takeUntil(gameStarted$)
+).subscribe(([selectedSquare, meta, color, gamePieces]) => {
 
   gamePieces = ([...gamePieces, {
     rank: meta.piece.rank,
@@ -81,7 +81,7 @@ selectedSquare$.pipe(
   }]);
   piecesOnFieldChanged$.next(gamePieces);
 
-  if (!hasPiecesOfType(meta.piece, color)) {
+  if (!hasPiecesOfType(meta.piece, color, gamePieces)) {
     meta.node.remove();
   }
 
