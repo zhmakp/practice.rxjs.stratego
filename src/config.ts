@@ -22,3 +22,7 @@ export const PIECES_PER_PLAYER = 40
 export const MAX_WIDTH = 500;
 
 export const MAX_HEIGHT = 500;
+
+export const END_ROW_TO_SETUP_RED = 3;
+
+export const START_ROW_TO_SETUP_BLUE = 5;

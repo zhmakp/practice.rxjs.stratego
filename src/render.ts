@@ -75,10 +75,14 @@ const drawImage = drawImageWithCache({});
 
 export const drawPlayerGamePiece = (gamePiece: GamePiece) => {
   const { square, color, type } = gamePiece;
-
   drawImage(square, pieceIcons[color][type]);
 }
 
 export const drawOponentGamePiece = (gamePiece: GamePiece) => {
   drawImage(gamePiece.square, hiddenIcons[gamePiece.color]);
 } 
+
+export const drawPossibleMovements = (prevMovements: Square[], curMovements: Square[]) => {
+  prevMovements?.forEach(move => clearRect(move));
+  curMovements?.forEach(move => fillRect(move, 'greenyellow'))
+}
