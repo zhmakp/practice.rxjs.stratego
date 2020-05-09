@@ -1,5 +1,5 @@
 import { selectedSquare$, clearRect, fillRect, drawPlayerGamePiece, drawOponentGamePiece, drawPossibleMovements } from './render';
-import { Subject, Observable, BehaviorSubject, merge, zip, of, concat, interval } from 'rxjs';
+import { Subject, Observable, BehaviorSubject, merge, zip, of, concat, interval, forkJoin } from 'rxjs';
 import { withLatestFrom, filter, pairwise, startWith, scan, takeWhile, map, skipUntil, distinctUntilChanged, switchMap, skipWhile, tap, take, flatMap, mergeMap, debounceTime, debounce, last, takeUntil } from 'rxjs/operators';
 import { Piece, PieceColor, GamePiece, AttackResult } from './models/piece.model';
 import { pieces, PIECES_PER_PLAYER, SQUARE_SIZE, END_ROW_TO_SETUP_RED, START_ROW_TO_SETUP_BLUE } from './config';
@@ -56,11 +56,17 @@ const gameStarted$ = gamePiecesChanged$.pipe(
 
 const posibleMovementsChanged$: Subject<Square[]> = new Subject();
 
-const selectedGamePiece$ = selectedSquare$.pipe(
+const gamePieceClick$ = selectedSquare$.pipe(
   skipUntil(gameStarted$),
-  withLatestFrom(gamePiecesChanged$, currentColor$),
-  filter(([square, pieces, color]) => pieces.some(x => intersect(x.square)(square) && x.color === color)),
-  map(([square, pieces, color]) => pieces.find(x => intersect(x.square)(square) && x.color === color)),
+  withLatestFrom(gamePiecesChanged$),
+  filter(([square, pieces]) => pieces.some(x => intersect(x.square)(square))),
+  map(([square, pieces]) => pieces.find(x => intersect(x.square)(square))),
+)
+
+const playerGamePiece$ = gamePieceClick$.pipe(
+  withLatestFrom(currentColor$),
+  filter(([gamePiece, color]) => gamePiece.color === color),
+  map(([gamePiece]) => gamePiece),
 )
 
 selectedSquare$.pipe(
@@ -92,48 +98,48 @@ selectedSquare$.pipe(
   }
 })
 
-const possibleMovements$ = selectedGamePiece$.pipe(
+playerGamePiece$.pipe(
   withLatestFrom(occupiedSquares$),
-  map(([gamePiece, occupiedSquares]) => getMovements(gamePiece, occupiedSquares)),
-  tap(movements => posibleMovementsChanged$.next(movements))
-);
+  map(([gamePiece, occupiedSquares]) => getMovements(gamePiece, occupiedSquares))
+).subscribe(movements => posibleMovementsChanged$.next(movements));
 
 posibleMovementsChanged$
   .pipe(startWith(null), pairwise())
   .subscribe((movementsChange) => drawPossibleMovements(...movementsChange));
 
 const pieceDestinationClick$ = selectedSquare$.pipe(
-  withLatestFrom(possibleMovements$),
+  withLatestFrom(posibleMovementsChanged$),
   filter(([square, movements]) => movements && movements.some(intersect(square))),
   map(([square]) => square)
 )
 
 pieceDestinationClick$.pipe(
   skipUntil(gameStarted$),
-  withLatestFrom(selectedGamePiece$, gamePiecesChanged$),
+  withLatestFrom(playerGamePiece$, gamePiecesChanged$),
   map(([destination, gamePiece, gamePieces]) => gamePieces.map(x => {
     return x.id === gamePiece.id ? { ...x, square: destination } : x;
-  }))
+  })),
+  tap(() => turnChanged$.next())
 ).subscribe((gamePieces) => {
   gamePiecesChanged$.next(gamePieces);
-  turnChanged$.next();
 })
 
-const enemyUnderAttack$ = selectedSquare$.pipe(
-  withLatestFrom(gamePiecesChanged$, currentColor$),
-  map(([square, pieces, color]) => pieces.find(x => x.color !== color && intersect(x.square)(square))),
-  filter(enemy => !!enemy),
+const enemyGamePiece$ = gamePieceClick$.pipe(
+  withLatestFrom(currentColor$),
+  filter(([gamePiece, color]) => gamePiece.color !== color),
+  map(([gamePiece]) => gamePiece),
 )
 
-const battleResult$ = enemyUnderAttack$.pipe(
-  withLatestFrom(selectedGamePiece$, occupiedSquares$),
+const battleResult$ = enemyGamePiece$.pipe(
+  withLatestFrom(playerGamePiece$, occupiedSquares$),
   filter(([enemy, player, occupied]) => canAttack(player, enemy, occupied)),
   map(([enemy, player]) => ({ enemy, player, result: attack(player, enemy) }))
 );
 
 battleResult$.pipe(
   withLatestFrom(gamePiecesChanged$),
-  filter(([battleResult]) => battleResult.result !== AttackResult.FlagCaptured)
+  filter(([battleResult]) => battleResult.result !== AttackResult.FlagCaptured),
+  tap(() => turnChanged$.next())
 ).subscribe(([battleResult, gamePieces]) => {
   const { enemy, player, result } = battleResult;
 
@@ -152,22 +158,23 @@ battleResult$.pipe(
   }
 
   gamePiecesChanged$.next(gamePieces);
-  turnChanged$.next();
 })
 
 const flagCaptured$ = battleResult$.pipe(
   filter((battleResult) => battleResult.result === AttackResult.FlagCaptured),
 );
 
-gamePiecesChanged$.pipe(
-  takeUntil(gameStarted$),
-  withLatestFrom(currentColor$),
-  map(([items, color]) => items.filter(x => x.color === color)),
-).subscribe(items => items.forEach(drawPlayerGamePiece))
+const cannotMakeAnyMove$ = gamePiecesChanged$.pipe(
+  skipUntil(gameStarted$),
+  withLatestFrom(occupiedSquares$, currentColor$),
+  map(([pieces, occupied, color]) => pieces.filter(piece => piece.color === color).map(piece => getMovements(piece, occupied))),
+  filter(movements => movements.every(movements => movements.length === 0))
+);
 
-turnChanged$.pipe(
-  tap(() => posibleMovementsChanged$.next([])),
+merge(turnChanged$, gamePiecesChanged$).pipe(
   switchMap(() => gamePiecesChanged$.pipe(take(1))),
+  distinctUntilChanged(),
+  tap(() => posibleMovementsChanged$.next([])),
   startWith([] as GamePiece[]),
   pairwise(),
   withLatestFrom(currentColor$),
@@ -189,7 +196,7 @@ turnChanged$.pipe(
   });
 });
 
-flagCaptured$.pipe(withLatestFrom(currentColor$)).subscribe(([_, color]) => {
+merge(flagCaptured$, cannotMakeAnyMove$).pipe(withLatestFrom(currentColor$)).subscribe(([_, color]) => {
   const modal = document.getElementsByClassName('modal')[0] as HTMLElement;
   modal.style.display = 'block';
 
