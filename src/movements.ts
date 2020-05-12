@@ -8,7 +8,7 @@ const notMoveable: PieceType[] = ['Bomb', 'Flag'];
 function getAnyNumberInStraigntLine(position: Square, occupied: Square[]) {
   let squaresToMove: Square[] = [];
 
-  const moveUntilEnemy = (xDelta: number, yDelta: number) => {
+  const moveUntilNotOccupied = (xDelta: number, yDelta: number) => {
     let lineSquare: Square[] = [];
     let current = { ...position, x: position.x + xDelta, y: position.y + yDelta };
     
@@ -25,19 +25,19 @@ function getAnyNumberInStraigntLine(position: Square, occupied: Square[]) {
   }
 
   if (position.x > 0) {
-    squaresToMove = squaresToMove.concat(moveUntilEnemy(-SQUARE_SIZE, 0));
+    squaresToMove = squaresToMove.concat(moveUntilNotOccupied(-SQUARE_SIZE, 0));
   }
 
   if (position.y > 0) {
-    squaresToMove = squaresToMove.concat(moveUntilEnemy(0, -SQUARE_SIZE));
+    squaresToMove = squaresToMove.concat(moveUntilNotOccupied(0, -SQUARE_SIZE));
   }
 
   if (position.x + SQUARE_SIZE <= 500) {
-    squaresToMove = squaresToMove.concat(moveUntilEnemy(SQUARE_SIZE, 0));
+    squaresToMove = squaresToMove.concat(moveUntilNotOccupied(SQUARE_SIZE, 0));
   }
 
   if (position.y + SQUARE_SIZE <= 500) {
-    squaresToMove = squaresToMove.concat(moveUntilEnemy(0, SQUARE_SIZE));
+    squaresToMove = squaresToMove.concat(moveUntilNotOccupied(0, SQUARE_SIZE));
   }
 
   return squaresToMove;
